@@ -61,10 +61,18 @@ function submitAnswer(q){ if(!selected.size){alert('请先选择答案'); return
   if(q.type==='judge'){ ok=[...selected][0]===q.answer; document.querySelectorAll('.option').forEach(el=>{const k=el.dataset.key; if(k===q.answer) el.classList.add('correct'); else if(selected.has(k)) el.classList.add('wrong');}); }
   store.stats.done++; if(ok){ store.stats.right++; delete store.wrong[q.id]; } else store.wrong[q.id]=true; save();
   $('feedback').innerHTML=answerBox(q, ok?'<span class="badge green">回答正确</span> ':'<span class="badge red">回答错误</span> ');
+  $('feedback').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-function showAnswer(q){ answered=true; if(q.type==='single'||q.type==='multiple') document.querySelectorAll('.option').forEach(el=>{if(q.answer.includes(el.dataset.key)) el.classList.add('correct')}); if(q.type==='judge') document.querySelectorAll('.option').forEach(el=>{if(el.dataset.key===q.answer) el.classList.add('correct')}); $('feedback').innerHTML=answerBox(q); }
+function showAnswer(q){ answered=true; if(q.type==='single'||q.type==='multiple') document.querySelectorAll('.option').forEach(el=>{if(q.answer.includes(el.dataset.key)) el.classList.add('correct')}); if(q.type==='judge') document.querySelectorAll('.option').forEach(el=>{if(el.dataset.key===q.answer) el.classList.add('correct')}); $('feedback').innerHTML=answerBox(q); $('feedback').scrollIntoView({behavior:'smooth',block:'nearest'}); }
 function toggleFavorite(){ const q=list[current]; if(!q) return; store.favorite[q.id] ? delete store.favorite[q.id] : store.favorite[q.id]=true; save(); render(); }
-function go(d){ if(!list.length) return; current=(current+d+list.length)%list.length; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+function go(d){
+  if(!list.length) return;
+  // 手机上通常是在看选项或参考答案时点“下一题”。保留阅读位置，避免每题都被拉回页面顶部。
+  const readingPosition = window.scrollY;
+  current=(current+d+list.length)%list.length;
+  render();
+  requestAnimationFrame(()=>window.scrollTo({top:readingPosition,behavior:'auto'}));
+}
 function updateProgress(){ const pct=list.length?((current+1)/list.length*100):0; $('progressBar').style.width=pct+'%'; $('progressText').textContent=list.length?`${TYPE_NAME[list[current].type]} 第 ${list[current].number} 题 · 当前列表 ${current+1}/${list.length}`:'没有匹配题目'; }
 function updateStats(){ $('doneCount').textContent=store.stats.done||0; $('accuracy').textContent=(store.stats.done?Math.round(store.stats.right/store.stats.done*100):0)+'%'; $('wrongCount').textContent=Object.keys(store.wrong||{}).length; }
 function exportProgress(){
