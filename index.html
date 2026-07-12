@@ -10,11 +10,15 @@
 </head>
 <body>
   <header class="app-header">
-    <div>
+    <div class="header-title">
       <h1>面试题库刷题</h1>
       <p id="subtitle">重庆市律师协会申请律师执业人员面试考核题库</p>
     </div>
-    <button id="themeBtn" class="icon-btn" title="切换深色模式">🌙</button>
+    <div class="header-actions">
+      <button id="focusBtn" class="icon-btn text-icon" title="切换专注模式">专注</button>
+      <button id="jumpBtn" class="icon-btn text-icon" title="跳转题目">题号</button>
+      <button id="themeBtn" class="icon-btn" title="切换深色模式">🌙</button>
+    </div>
   </header>
 
   <main class="container">
@@ -67,6 +71,16 @@
     <button id="favBtn">☆ 收藏</button>
     <button id="nextBtn" class="primary">下一题</button>
   </footer>
+
+  <div id="jumpSheet" class="jump-sheet" hidden>
+    <button id="jumpBackdrop" class="jump-backdrop" aria-label="关闭跳题面板"></button>
+    <section class="jump-dialog" role="dialog" aria-modal="true" aria-labelledby="jumpTitle">
+      <div class="jump-dialog-head"><h2 id="jumpTitle">跳转题目</h2><button id="jumpCloseBtn" class="close-btn" aria-label="关闭">×</button></div>
+      <p id="jumpHint" class="muted">输入当前列表中的题目序号。</p>
+      <input id="jumpInput" type="number" inputmode="numeric" min="1" step="1" placeholder="例如：12" aria-label="题目序号" />
+      <button id="jumpConfirmBtn" class="action-btn primary jump-confirm">跳转</button>
+    </section>
+  </div>
 
   <script src="app.js"></script>
 </body>

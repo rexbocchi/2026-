@@ -1,7 +1,7 @@
 const TYPE_NAME = {single:'单选题', multiple:'多选题', judge:'判断题', short:'简答题', case:'案例分析题'};
 const STORE_KEY = 'interview-practice-v1';
 let allQuestions = [], list = [], current = 0, mode = 'practice', selected = new Set(), answered = false;
-let store = JSON.parse(localStorage.getItem(STORE_KEY) || '{"wrong":{},"favorite":{},"stats":{"done":0,"right":0},"theme":"","view":{}}');
+let store = JSON.parse(localStorage.getItem(STORE_KEY) || '{"wrong":{},"favorite":{},"stats":{"done":0,"right":0},"theme":"","focus":false,"view":{}}');
 const $ = id => document.getElementById(id);
 function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(store)); updateStats(); }
 function shuffle(a){ const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [b[i],b[j]]=[b[j],b[i]]} return b; }
@@ -11,7 +11,7 @@ async function init(){
   const data = await fetch('questions.json').then(r=>r.json());
   allQuestions = data.questions;
   $('totalCount').textContent = allQuestions.length;
-  bind(); restoreView(); applyFilters(true); updateStats();
+  bind(); restoreView(); setFocusMode(Boolean(store.focus)); applyFilters(true); updateStats();
   if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 }
 function bind(){
@@ -19,9 +19,23 @@ function bind(){
   $('typeFilter').onchange=()=>{current=0; applyFilters();}; $('orderFilter').onchange=()=>{current=0; applyFilters();}; $('searchInput').oninput=()=>{current=0; applyFilters();};
   $('prevBtn').onclick=()=>go(-1); $('nextBtn').onclick=handlePrimaryAction; $('favBtn').onclick=toggleFavorite;
   $('themeBtn').onclick=()=>{document.documentElement.classList.toggle('dark'); store.theme=document.documentElement.classList.contains('dark')?'dark':''; save();};
+  $('focusBtn').onclick=()=>setFocusMode(!document.body.classList.contains('focus-mode'));
+  $('jumpBtn').onclick=openJumpSheet;
+  $('jumpBackdrop').onclick=closeJumpSheet;
+  $('jumpCloseBtn').onclick=closeJumpSheet;
+  $('jumpConfirmBtn').onclick=jumpToQuestion;
+  $('jumpInput').onkeydown=e=>{if(e.key==='Enter') jumpToQuestion(); if(e.key==='Escape') closeJumpSheet();};
   $('exportBtn').onclick=exportProgress;
   $('importFile').onchange=importProgress;
   $('resetBtn').onclick=resetProgress;
+}
+
+function setFocusMode(on){
+  document.body.classList.toggle('focus-mode', on);
+  $('focusBtn').textContent = on ? '设置' : '专注';
+  $('focusBtn').title = on ? '展开设置' : '进入专注模式';
+  store.focus = on;
+  localStorage.setItem(STORE_KEY, JSON.stringify(store));
 }
 
 function restoreView(){
@@ -88,10 +102,10 @@ function submitAnswer(q){ if(!selected.size){alert('请先选择答案'); return
 function showAnswer(q){ answered=true; if(q.type==='single'||q.type==='multiple') document.querySelectorAll('.option').forEach(el=>{if(q.answer.includes(el.dataset.key)) el.classList.add('correct')}); if(q.type==='judge') document.querySelectorAll('.option').forEach(el=>{if(el.dataset.key===q.answer) el.classList.add('correct')}); $('feedback').innerHTML=answerBox(q); updateBottomAction(q); $('feedback').scrollIntoView({behavior:'smooth',block:'nearest'}); }
 function toggleFavorite(){ const q=list[current]; if(!q) return; store.favorite[q.id] ? delete store.favorite[q.id] : store.favorite[q.id]=true; save(); render(); }
 function go(d){
-  if(!list.length) return;
+  if(!list.length || current+d < 0 || current+d >= list.length) return;
   // 手机上通常是在看选项或参考答案时点“下一题”。保留阅读位置，避免每题都被拉回页面顶部。
   const readingPosition = window.scrollY;
-  current=(current+d+list.length)%list.length;
+  current += d;
   render();
   requestAnimationFrame(()=>window.scrollTo({top:readingPosition,behavior:'auto'}));
 }
@@ -103,11 +117,28 @@ function handlePrimaryAction(){
   showAnswer(q);
 }
 function updateBottomAction(q=list[current]){
-  const btn = $('nextBtn');
-  if(!q){ btn.textContent='下一题'; btn.disabled=true; return; }
-  btn.disabled=false;
-  if(mode==='recite' || answered){ btn.textContent='下一题'; return; }
-  btn.textContent = (q.type==='single'||q.type==='multiple'||q.type==='judge') ? '提交答案' : '查看参考答案';
+  const btn = $('nextBtn'), prev = $('prevBtn'), skip = $('skipBtn');
+  if(!q){ btn.textContent='下一题'; btn.disabled=true; prev.disabled=true; return; }
+  prev.disabled = current === 0;
+  if(mode==='recite' || answered){ btn.textContent='下一题'; btn.disabled=current === list.length-1; }
+  else { btn.disabled=false; btn.textContent = (q.type==='single'||q.type==='multiple'||q.type==='judge') ? '提交答案' : '查看参考答案'; }
+  if(skip) skip.disabled = current === list.length-1;
+}
+function openJumpSheet(){
+  if(!list.length) return;
+  $('jumpHint').textContent = `输入当前列表中的题目序号（1 - ${list.length}）。`;
+  $('jumpInput').min = '1'; $('jumpInput').max = String(list.length); $('jumpInput').value = String(current+1);
+  $('jumpSheet').hidden = false;
+  requestAnimationFrame(()=>$('jumpInput').focus());
+}
+function closeJumpSheet(){ $('jumpSheet').hidden = true; }
+function jumpToQuestion(){
+  const target = Number.parseInt($('jumpInput').value, 10);
+  if(!Number.isInteger(target) || target < 1 || target > list.length){ alert(`请输入 1 到 ${list.length} 之间的题号`); return; }
+  current = target-1;
+  closeJumpSheet();
+  render();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 function updateProgress(){ const pct=list.length?((current+1)/list.length*100):0; $('progressBar').style.width=pct+'%'; $('progressText').textContent=list.length?`${TYPE_NAME[list[current].type]} 第 ${list[current].number} 题 · 当前列表 ${current+1}/${list.length}`:'没有匹配题目'; }
 function updateStats(){ $('doneCount').textContent=store.stats.done||0; $('accuracy').textContent=(store.stats.done?Math.round(store.stats.right/store.stats.done*100):0)+'%'; $('wrongCount').textContent=Object.keys(store.wrong||{}).length; }
@@ -138,9 +169,10 @@ function importProgress(ev){
         favorite: progress.favorite && typeof progress.favorite === 'object' ? progress.favorite : {},
         stats: progress.stats && typeof progress.stats === 'object' ? progress.stats : {done:0,right:0},
         theme: progress.theme || store.theme || '',
+        focus: typeof progress.focus === 'boolean' ? progress.focus : Boolean(store.focus),
         view: progress.view && typeof progress.view === 'object' ? progress.view : (store.view || {})
       };
-      store = next; save(); applyFilters(); toast('进度已导入');
+      store = next; setFocusMode(Boolean(store.focus)); save(); applyFilters(); toast('进度已导入');
     }catch(e){ alert('导入失败：' + e.message); }
   };
   reader.readAsText(file, 'utf-8');
@@ -148,7 +180,7 @@ function importProgress(ev){
 function resetProgress(){
   if(!confirm('确定清空本机刷题进度、错题和收藏吗？此操作不可撤销。')) return;
   const theme = store.theme || '';
-  store = {wrong:{}, favorite:{}, stats:{done:0,right:0}, theme, view:store.view || {}};
+  store = {wrong:{}, favorite:{}, stats:{done:0,right:0}, theme, focus:Boolean(store.focus), view:store.view || {}};
   save(); applyFilters(); toast('本机进度已清空');
 }
 function toast(msg){
